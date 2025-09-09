@@ -1,1 +1,665 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>A-G TKO - Template Editor</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body { 
+            font-family: 'Tajawal', sans-serif; 
+        }
+        .bg-pattern {
+            background-image: radial-gradient(circle at 1px 1px, rgba(255,255,255,0.05) 1px, transparent 0);
+            background-size: 20px 20px;
+        }
+        .toast { 
+            animation: fadeInOut 3.5s ease-in-out forwards; 
+        }
+        @keyframes fadeInOut {
+            0%, 100% { opacity: 0; transform: translateY(-20px); }
+            10%, 90% { opacity: 1; transform: translateY(0); }
+        }
+        .modal-content { 
+            animation: fadeIn 0.3s ease-in-out; 
+        }
+        @keyframes fadeIn { 
+            from { opacity: 0; transform: scale(0.95); } 
+            to { opacity: 1; transform: scale(1); } 
+        }
+        
+        body.preview-mode #initial-view { display: none; }
+        body:not(.preview-mode) #preview-container, body:not(.preview-mode) #fab-container { display: none; }
+
+        #preview-container {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            border: none; z-index: 10;
+        }
+        .text-glow {
+            text-shadow: 0 0 12px rgba(99, 102, 241, 0.8), 0 0 20px rgba(99, 102, 241, 0.5);
+        }
+        .fab-menu-item {
+            background-color: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(5px);
+        }
+        .dark .fab-menu-item {
+            background-color: rgba(30, 41, 59, 0.8);
+        }
+    </style>
+</head>
+<body class="bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-200 transition-colors duration-500">
+
+    <div id="toast-container" class="fixed top-5 left-5 z-[100]"></div>
+    
+    <!-- Custom Modal -->
+    <div id="modal-container" class="fixed inset-0 z-[200] hidden flex items-center justify-center bg-black bg-opacity-70 p-4">
+        <div class="modal-content bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-xl w-full max-w-sm border border-slate-200 dark:border-slate-700">
+            <h3 id="modal-title-custom" class="text-xl font-bold mb-4 text-indigo-500 dark:text-indigo-400"></h3>
+            <p id="modal-message-custom" class="mb-6"></p>
+            <div id="modal-actions-custom" class="flex justify-end">
+                <button id="modal-ok-custom" class="px-5 py-2 rounded-xl text-white font-semibold bg-indigo-600 hover:bg-indigo-700 transition shadow-lg shadow-indigo-500/20">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Initial View -->
+    <div id="initial-view" class="flex items-center justify-center min-h-screen p-4 bg-pattern">
+        <div class="text-center p-8 bg-white dark:bg-slate-800/80 backdrop-blur-sm rounded-3xl shadow-2xl max-w-lg w-full transform transition-all duration-300 hover:scale-105 border border-slate-200 dark:border-slate-700">
+            <i class="fas fa-magic-wand-sparkles text-6xl text-indigo-500 mb-4 animate-pulse"></i>
+            <h1 class="text-4xl font-extrabold mb-3 text-glow bg-clip-text text-transparent bg-gradient-to-r from-indigo-500 to-purple-500">A-G TKO Editor</h1>
+            <p class="text-slate-500 dark:text-slate-400 mb-8">Upload your template, enable editing, click to change, and unleash your creativity.</p>
+            
+            <div class="mb-8 p-4 rounded-xl bg-indigo-50 dark:bg-slate-700/50 border border-indigo-200 dark:border-slate-600">
+                <p class="font-bold text-indigo-600 dark:text-indigo-400">Current Month:</p>
+                <p id="current-month" class="text-2xl font-extrabold mt-1 text-indigo-700 dark:text-indigo-300"></p>
+            </div>
+
+            <label for="htmlUploader" class="w-full inline-block bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-bold py-4 px-8 rounded-xl cursor-pointer transition duration-300 transform hover:scale-105 shadow-lg shadow-indigo-500/30">
+                <i class="fas fa-upload mr-2"></i> Choose HTML Template
+            </label>
+            <input type="file" id="htmlUploader" class="hidden" accept=".html,.htm">
+        </div>
+    </div>
+
+    <!-- Preview Container -->
+    <div id="preview-container">
+        <iframe id="previewFrame" class="w-full h-full bg-white" title="Template Preview"></iframe>
+    </div>
+    
+    <!-- Floating Action Button & Menu -->
+    <div id="fab-container" class="fixed bottom-8 right-8 z-50">
+        <div id="fab-menu" class="mb-3 hidden flex flex-col items-end space-y-3">
+             <button id="toggle-edit-btn" class="fab-menu-item flex items-center px-4 py-2 rounded-xl shadow-lg hover:bg-slate-50 dark:hover:bg-slate-600 transition w-full text-left">
+                <span id="toggle-edit-text">Disable Editing</span><i id="toggle-edit-icon" class="fas fa-eye-slash text-red-500 ml-3"></i> 
+            </button>
+            <button id="add-project-btn" class="fab-menu-item flex items-center px-4 py-2 rounded-xl shadow-lg hover:bg-slate-50 dark:hover:bg-slate-600 transition w-full text-left">
+                <span>Add Project</span><i class="fas fa-plus-circle text-green-500 ml-3"></i> 
+            </button>
+            <button id="replace-email-btn" class="fab-menu-item flex items-center px-4 py-2 rounded-xl shadow-lg hover:bg-slate-50 dark:hover:bg-slate-600 transition w-full text-left">
+                <span>Replace Email</span><i class="fas fa-at text-purple-500 ml-3"></i> 
+            </button>
+            <button onclick="exportTemplate()" class="fab-menu-item flex items-center px-4 py-2 rounded-xl shadow-lg hover:bg-slate-50 dark:hover:bg-slate-600 transition w-full text-left">
+                <span>Export Template</span><i class="fas fa-file-export text-indigo-500 ml-3"></i> 
+            </button>
+            <button onclick="toggleTheme()" class="fab-menu-item flex items-center px-4 py-2 rounded-xl shadow-lg hover:bg-slate-50 dark:hover:bg-slate-600 transition w-full text-left">
+                <span id="theme-text">Dark Mode</span><i id="theme-icon" class="fas fa-moon text-yellow-500 ml-3"></i> 
+            </button>
+            <button onclick="location.reload()" class="fab-menu-item flex items-center px-4 py-2 rounded-xl shadow-lg hover:bg-slate-50 dark:hover:bg-slate-600 transition w-full text-left">
+                <span>Upload New</span><i class="fas fa-sync-alt text-sky-500 ml-3"></i> 
+            </button>
+        </div>
+        <button id="fab-btn" class="w-16 h-16 rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 text-white flex items-center justify-center text-2xl shadow-xl hover:bg-indigo-700 transition transform hover:rotate-45">
+            <i class="fas fa-cogs"></i>
+        </button>
+    </div>
+
+    <!-- Edit Modal -->
+    <div id="edit-modal" class="fixed inset-0 z-[60] bg-black bg-opacity-60 flex items-center justify-center p-4 hidden">
+        <div class="modal-content bg-white dark:bg-slate-800 rounded-2xl shadow-2xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto border border-slate-200 dark:border-slate-700">
+            <div class="flex justify-between items-center mb-4 border-b pb-3 dark:border-slate-600">
+                <h2 id="modal-title" class="text-xl font-bold text-indigo-500"></h2>
+                <button id="close-modal-btn" class="text-slate-400 hover:text-red-500 text-2xl">&times;</button>
+            </div>
+            <div class="space-y-4">
+                <div>
+                    <label for="editText" class="block mb-1 font-semibold text-sm">Project Title</label>
+                    <textarea id="editText" rows="2" class="w-full p-2 border rounded-xl dark:bg-slate-700 dark:border-slate-600 focus:ring-2 focus:ring-indigo-500 focus:outline-none"></textarea>
+                </div>
+                <div>
+                    <label for="editLink" class="block mb-1 font-semibold text-sm">Link (URL)</label>
+                    <input type="url" id="editLink" class="w-full p-2 border rounded-xl dark:bg-slate-700 dark:border-slate-600 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                </div>
+                <div id="category-section" class="hidden">
+                    <label for="editCategory" class="block mb-1 font-semibold text-sm">Category</label>
+                    <select id="editCategory" class="w-full p-2 border rounded-xl dark:bg-slate-700 dark:border-slate-600 focus:ring-2 focus:ring-indigo-500 focus:outline-none"></select>
+                    <p class="text-xs text-slate-500 mt-2">Or add a new category:</p>
+                    <input type="text" id="newCategory" placeholder="Example: Digital Designs" class="w-full text-sm mt-1 p-2 border rounded-xl dark:bg-slate-700 dark:border-slate-600 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block mb-1 font-semibold text-sm">Image</label>
+                    <div class="flex items-center space-x-4">
+                        <img id="image-preview" src="https://placehold.co/100x100/e2e8f0/94a3b8?text=Preview" alt="Preview" class="w-24 h-24 rounded-xl object-cover border dark:border-slate-600">
+                        <div class="flex-1">
+                            <label for="editImageFile" class="w-full text-center bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-sm font-medium py-2 px-3 rounded-xl cursor-pointer transition">
+                                <i class="fas fa-cloud-upload-alt mr-2"></i> Upload New Image
+                            </label>
+                            <input type="file" id="editImageFile" class="hidden" accept="image/*">
+                            <p class="text-xs text-slate-500 mt-2">Or paste an image link:</p>
+                            <input type="url" id="editImageUrl" class="w-full text-sm mt-1 p-2 border rounded-xl dark:bg-slate-700 dark:border-slate-600 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="mt-6 pt-4 border-t dark:border-slate-600 flex justify-end space-x-3">
+                <button id="cancel-edit-btn" class="px-4 py-2 rounded-xl bg-slate-200 dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500 transition">Cancel</button>
+                <button id="apply-changes-btn" class="px-6 py-2 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 transition font-bold shadow-lg shadow-indigo-500/20">Apply</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Email Modal -->
+    <div id="email-modal" class="fixed inset-0 z-[60] bg-black bg-opacity-60 flex items-center justify-center p-4 hidden">
+        <div class="modal-content bg-white dark:bg-slate-800 rounded-2xl shadow-2xl p-6 w-full max-w-sm border border-slate-200 dark:border-slate-700">
+             <div class="flex justify-between items-center mb-4 border-b pb-3 dark:border-slate-600">
+                <h2 class="text-xl font-bold text-purple-500"><i class="fas fa-at mr-2"></i>Replace FormSubmit Email</h2>
+                <button id="close-email-modal-btn" class="text-slate-400 hover:text-red-500 text-2xl">&times;</button>
+            </div>
+            <div>
+                <label for="new-email-input" class="block mb-2 font-semibold text-sm">New Email Address</label>
+                <input type="email" id="new-email-input" placeholder="enter.new@email.com" class="w-full p-2 border rounded-xl dark:bg-slate-700 dark:border-slate-600 focus:ring-2 focus:ring-purple-500 focus:outline-none">
+                <p class="text-xs text-slate-500 mt-2">The FormSubmit link and all visible emails will be updated.</p>
+            </div>
+            <div class="mt-6 pt-4 border-t dark:border-slate-600 flex justify-end space-x-3">
+                 <button id="cancel-email-change-btn" class="px-4 py-2 rounded-xl bg-slate-200 dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500 transition">Cancel</button>
+                <button id="apply-email-change-btn" class="px-6 py-2 rounded-xl bg-purple-600 text-white hover:bg-purple-700 transition font-bold shadow-lg shadow-purple-500/20">Replace</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // DOM Elements
+        const body = document.body;
+        const htmlUploader = document.getElementById('htmlUploader');
+        const previewFrame = document.getElementById('previewFrame');
+        const fabBtn = document.getElementById('fab-btn');
+        const fabMenu = document.getElementById('fab-menu');
+        
+        const editModal = document.getElementById('edit-modal');
+        const modalTitle = document.getElementById('modal-title');
+        const closeModalBtn = document.getElementById('close-modal-btn');
+        const cancelEditBtn = document.getElementById('cancel-edit-btn');
+        const applyChangesBtn = document.getElementById('apply-changes-btn');
+        const addProjectBtn = document.getElementById('add-project-btn');
+        const editText = document.getElementById('editText');
+        const editLink = document.getElementById('editLink');
+        const imagePreview = document.getElementById('image-preview');
+        const editImageFile = document.getElementById('editImageFile');
+        const editImageUrl = document.getElementById('editImageUrl');
+        const categorySection = document.getElementById('category-section');
+        const editCategory = document.getElementById('editCategory');
+        const newCategory = document.getElementById('newCategory');
+
+        const emailModal = document.getElementById('email-modal');
+        const replaceEmailBtn = document.getElementById('replace-email-btn');
+        const closeEmailModalBtn = document.getElementById('close-email-modal-btn');
+        const newEmailInput = document.getElementById('new-email-input');
+        const applyEmailChangeBtn = document.getElementById('apply-email-change-btn');
+        const cancelEmailChangeBtn = document.getElementById('cancel-email-change-btn');
+        
+        const customModal = document.getElementById('modal-container');
+        const customModalTitle = document.getElementById('modal-title-custom');
+        const customModalMessage = document.getElementById('modal-message-custom');
+        const customModalOkBtn = document.getElementById('modal-ok-custom');
+        
+        const currentMonthElement = document.getElementById('current-month');
+        const themeIcon = document.getElementById('theme-icon');
+        const themeText = document.getElementById('theme-text');
+
+        const toggleEditBtn = document.getElementById('toggle-edit-btn');
+        const toggleEditText = document.getElementById('toggle-edit-text');
+        const toggleEditIcon = document.getElementById('toggle-edit-icon');
+        
+        // State Variables
+        let currentHtmlContent = '';
+        let currentFileName = 'template.html';
+        let activeEditingElement = null;
+        let newBase64Image = null;
+        let modalMode = 'edit';
+        let isEditModeActive = true; 
+        
+        // Edit Limit Variables
+        let editCount = 0;
+        const MAX_EDITS = 5;
+        
+        const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+        // --- Theme Management ---
+        function initializeTheme() {
+            const savedTheme = localStorage.getItem('theme');
+            if (savedTheme === 'dark' || (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                body.classList.add('dark');
+                updateThemeToggle(true);
+            } else {
+                body.classList.remove('dark');
+                updateThemeToggle(false);
+            }
+        }
+
+        function updateThemeToggle(isDark) {
+            if (isDark) {
+                themeIcon.classList.replace('fa-moon', 'fa-sun');
+                themeIcon.classList.replace('text-yellow-500', 'text-yellow-400');
+                themeText.textContent = 'Light Mode';
+            } else {
+                themeIcon.classList.replace('fa-sun', 'fa-moon');
+                themeIcon.classList.replace('text-yellow-400', 'text-yellow-500');
+                themeText.textContent = 'Dark Mode';
+            }
+        }
+
+        function toggleTheme() {
+            const isDark = body.classList.toggle('dark');
+            localStorage.setItem('theme', isDark ? 'dark' : 'light');
+            updateThemeToggle(isDark);
+        }
+
+        // --- UI Utilities (Modals & Toasts) ---
+        function showCustomModal(title, message) {
+            customModalTitle.textContent = title;
+            customModalMessage.textContent = message;
+            customModal.classList.remove('hidden');
+        }
+        
+        customModalOkBtn.addEventListener('click', () => customModal.classList.add('hidden'));
+
+        function showToast(message, isSuccess = true) {
+            const toast = document.createElement('div');
+            const bgColor = isSuccess ? 'bg-green-500' : 'bg-red-500';
+            toast.className = `toast text-white px-6 py-3 rounded-xl shadow-lg ${bgColor}`;
+            toast.textContent = message;
+            document.getElementById('toast-container').appendChild(toast);
+            setTimeout(() => toast.remove(), 4000);
+        }
+
+        // --- Core Editor Logic ---
+        function reloadIframe(andInjectIds = false) {
+             if(andInjectIds){
+                 const parser = new DOMParser();
+                 const doc = parser.parseFromString(currentHtmlContent, 'text/html');
+                 doc.querySelectorAll('a, h1, h2, h3, h4, p, span, img, li, strong, em, b, i, .portfolio-item, .info-item p, .profile-title').forEach((el, index) => {
+                     if(el.closest('script, style, head')) return;
+                     if(!el.hasAttribute('data-editor-id')) {
+                         el.setAttribute('data-editor-id', `el-${Date.now()}-${index}`);
+                     }
+                 });
+                 currentHtmlContent = doc.documentElement.outerHTML;
+             }
+             previewFrame.srcdoc = currentHtmlContent;
+             previewFrame.onload = () => updateIframeStyles();
+         }
+
+        function enterPreviewMode() {
+            body.classList.add('preview-mode');
+            reloadIframe(true);
+        }
+
+        function exportTemplate() {
+            const tempDoc = new DOMParser().parseFromString(currentHtmlContent, 'text/html');
+            tempDoc.querySelectorAll('[data-editor-id], #editor-styles').forEach(el => el.remove());
+            const finalHtml = tempDoc.documentElement.outerHTML;
+
+            const blob = new Blob([finalHtml], { type: 'text/html' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = `edited-${currentFileName}`;
+            a.click();
+            URL.revokeObjectURL(a.href);
+            showToast('Template exported successfully!', true);
+        }
+
+        // --- Edit Mode & Limit Management ---
+        function checkEditLimit(isInitial = false) {
+            if (editCount >= MAX_EDITS) {
+                isEditModeActive = false;
+                updateIframeStyles();
+
+                addProjectBtn.disabled = true;
+                addProjectBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                
+                toggleEditBtn.disabled = true;
+                toggleEditBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                toggleEditText.textContent = "Edit Limit Reached";
+                toggleEditIcon.className = "fas fa-lock text-gray-500 ml-3";
+
+                if (!isInitial) {
+                    showCustomModal('Limit Reached', 'You have used your 5 free edits. For unlimited editing, please upgrade to the paid version.');
+                }
+            }
+        }
+
+        function updateIframeStyles() {
+            try {
+                const iframeDoc = previewFrame.contentWindow.document;
+                if (!iframeDoc) return;
+                
+                let style = iframeDoc.getElementById('editor-styles');
+                if (!style) {
+                    style = iframeDoc.createElement('style');
+                    style.id = 'editor-styles';
+                    iframeDoc.head.appendChild(style);
+                }
+
+                if (isEditModeActive) {
+                    style.textContent = `
+                        [data-editor-id]:hover { 
+                            outline: 2px dashed #4f46e5 !important; 
+                            cursor: pointer !important; 
+                            box-shadow: 0 0 15px rgba(79, 70, 229, 0.5) !important;
+                            transition: all 0.2s ease-in-out;
+                        }
+                    `;
+                } else {
+                    style.textContent = '';
+                }
+
+                iframeDoc.body.addEventListener('click', (e) => {
+                    if (!isEditModeActive) return;
+                    const target = e.target.closest('[data-editor-id]');
+                    if (target) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        openEditModalFor(target);
+                    }
+                }, true);
+
+            } catch (error) { console.error("Iframe access error:", error); }
+        }
+
+        function toggleEditMode() {
+            if (editCount >= MAX_EDITS) {
+                showToast('Editing is locked. You have reached the maximum limit.', false);
+                return;
+            }
+            isEditModeActive = !isEditModeActive;
+            if (isEditModeActive) {
+                toggleEditText.textContent = "Disable Editing";
+                toggleEditIcon.className = "fas fa-eye-slash text-red-500 ml-3";
+                showToast('Edit mode enabled', true);
+            } else {
+                toggleEditText.textContent = "Enable Editing";
+                toggleEditIcon.className = "fas fa-edit text-blue-500 ml-3";
+                showToast('Edit mode disabled', false);
+            }
+            updateIframeStyles();
+        }
+
+        // --- Modal & Editing Logic ---
+        function populateCategories(doc, currentCategory = '') {
+            editCategory.innerHTML = '';
+            const filterButtons = doc.querySelectorAll('.portfolio-filter .filter-btn, [data-filter]');
+            const categories = new Set();
+            filterButtons.forEach(btn => {
+                const category = btn.dataset.filter;
+                if (category && category.toLowerCase() !== 'all') categories.add(category);
+            });
+            
+            categories.forEach(cat => {
+                const option = document.createElement('option');
+                option.value = cat;
+                option.textContent = cat.charAt(0).toUpperCase() + cat.slice(1);
+                editCategory.appendChild(option);
+            });
+            editCategory.value = currentCategory;
+        }
+
+        function openEditModalFor(target) {
+            if (editCount >= MAX_EDITS) {
+                checkEditLimit();
+                return;
+            }
+            const id = target.getAttribute('data-editor-id');
+            const isProject = target.closest('.portfolio-item');
+            
+            modalMode = 'edit';
+            categorySection.style.display = isProject ? 'block' : 'none';
+            modalTitle.innerHTML = `<i class="fas fa-edit mr-2"></i>Edit Element`;
+
+            let textContent, linkUrl, imageUrl, projectCategory;
+            
+            if(isProject){
+                textContent = isProject.querySelector('.portfolio-title')?.textContent.trim() ?? '';
+                linkUrl = isProject.querySelector('a')?.href ?? '';
+                imageUrl = isProject.querySelector('img')?.src ?? '';
+                projectCategory = isProject.dataset.category;
+                populateCategories(previewFrame.contentWindow.document, projectCategory);
+            } else {
+                textContent = target.textContent.trim();
+                const parentLink = target.closest('a');
+                linkUrl = parentLink?.href ?? (target.href || '');
+                imageUrl = target.tagName === 'IMG' ? target.src : null;
+            }
+
+            activeEditingElement = { id, isProject };
+            
+            editText.value = textContent;
+            editLink.value = linkUrl;
+            imagePreview.src = imageUrl || 'https://placehold.co/100x100/e2e8f0/94a3b8?text=N/A';
+            editImageUrl.value = '';
+            newCategory.value = '';
+            newBase64Image = null;
+
+            editModal.classList.remove('hidden');
+        }
+        
+        function openAddProjectModal() {
+            if (editCount >= MAX_EDITS) {
+                checkEditLimit();
+                return;
+            }
+            modalMode = 'add';
+            modalTitle.innerHTML = `<i class="fas fa-plus-circle mr-2"></i>Add New Project`;
+            categorySection.style.display = 'block';
+            populateCategories(previewFrame.contentWindow.document);
+
+            activeEditingElement = null;
+            editText.value = ''; editLink.value = ''; editImageUrl.value = '';
+            editImageFile.value = ''; newCategory.value = '';
+            imagePreview.src = 'https://placehold.co/100x100/e2e8f0/94a3b8?text=New';
+            newBase64Image = null;
+            editModal.classList.remove('hidden');
+        }
+        
+        // --- Event Listeners ---
+        htmlUploader.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            localStorage.removeItem('editCount'); 
+            editCount = 0;
+            const reader = new FileReader();
+            reader.onload = (re) => {
+                currentHtmlContent = re.target.result;
+                currentFileName = file.name;
+                enterPreviewMode();
+            };
+            reader.readAsText(file);
+        });
+
+        fabBtn.addEventListener('click', () => fabMenu.classList.toggle('hidden'));
+        addProjectBtn.addEventListener('click', openAddProjectModal);
+        replaceEmailBtn.addEventListener('click', () => emailModal.classList.remove('hidden'));
+        toggleEditBtn.addEventListener('click', toggleEditMode);
+        
+        const closeEditModal = () => editModal.classList.add('hidden');
+        closeModalBtn.addEventListener('click', closeEditModal);
+        cancelEditBtn.addEventListener('click', closeEditModal);
+        
+        const closeEmailModal = () => emailModal.classList.add('hidden');
+        closeEmailModalBtn.addEventListener('click', closeEmailModal);
+        cancelEmailChangeBtn.addEventListener('click', closeEmailModal);
+
+        editImageFile.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (re) => { newBase64Image = re.target.result; imagePreview.src = newBase64Image; editImageUrl.value = ''; };
+                reader.readAsDataURL(file);
+            }
+        });
+        
+        editImageUrl.addEventListener('input', () => {
+            if(editImageUrl.value.trim()){ imagePreview.src = editImageUrl.value.trim(); newBase64Image = null; }
+        });
+
+        applyChangesBtn.addEventListener('click', () => {
+            if (modalMode === 'edit') applyEditChanges();
+            else applyAddProject();
+        });
+
+        applyEmailChangeBtn.addEventListener('click', () => {
+            if (editCount >= MAX_EDITS) {
+                checkEditLimit();
+                return;
+            }
+            const newEmail = newEmailInput.value.trim();
+            if(!newEmail.includes('@')){ showCustomModal('Invalid Email', 'Please enter a valid email address.'); return; }
+
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(currentHtmlContent, 'text/html');
+            let count = 0;
+
+            const form = doc.querySelector(`form[action^="https://formsubmit.co/"]`);
+            if(form) {
+                form.action = `https://formsubmit.co/${newEmail}`;
+                count++;
+            }
+            
+            doc.querySelectorAll('a[href^="mailto:"]').forEach(link => {
+                link.href = `mailto:${newEmail}`;
+                if(link.textContent.includes('@')) link.textContent = newEmail;
+                count++;
+            });
+            
+            const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT);
+            let node;
+            while(node = walker.nextNode()) {
+                if (node.nodeValue.includes('@')) {
+                   node.nodeValue = node.nodeValue.replace(/[\w.-]+@[\w.-]+\.\w+/g, newEmail);
+                   count++;
+                }
+            }
+
+            if (count > 0) {
+                currentHtmlContent = doc.documentElement.outerHTML;
+                reloadIframe();
+                editCount++;
+                localStorage.setItem('editCount', editCount);
+                showToast(`Email updated! (${editCount}/${MAX_EDITS} edits)`, true);
+                checkEditLimit();
+            } else {
+                showToast('No email found to change.', false);
+            }
+            closeEmailModal();
+        });
+
+        // --- Change Application Logic ---
+        function applyChangesToElement(doc) {
+              const targetElement = doc.querySelector(`[data-editor-id="${activeEditingElement.id}"]`);
+              if (!targetElement) return false;
+
+              if(activeEditingElement.isProject){
+                  const projectItem = targetElement.closest('.portfolio-item') || targetElement;
+                  if(projectItem.querySelector('.portfolio-title')) projectItem.querySelector('.portfolio-title').textContent = editText.value;
+                  if(projectItem.querySelector('a')) projectItem.querySelector('a').href = editLink.value;
+                  if(projectItem.querySelector('img')) {
+                      projectItem.querySelector('img').src = newBase64Image || (editImageUrl.value.trim() || projectItem.querySelector('img').src);
+                  }
+                  projectItem.dataset.category = (newCategory.value.trim() || editCategory.value).toLowerCase();
+              } else {
+                  if(targetElement.tagName !== 'IMG') targetElement.textContent = editText.value;
+                  
+                  const parentLink = targetElement.closest('a') || (targetElement.tagName === 'A' ? targetElement : null);
+                  if(parentLink) parentLink.href = editLink.value;
+
+                  if(targetElement.tagName === 'IMG') {
+                      targetElement.src = newBase64Image || (editImageUrl.value.trim() || targetElement.src);
+                  }
+              }
+              return true;
+        }
+        
+        function handleNewCategory(doc){
+            const newCat = newCategory.value.trim();
+            if(!newCat) return;
+
+            const filterContainer = doc.querySelector('.portfolio-filter');
+            const newCatId = newCat.toLowerCase();
+            if(filterContainer && !doc.querySelector(`[data-filter="${newCatId}"]`)){
+                const newButton = doc.createElement('button');
+                newButton.className = 'filter-btn';
+                newButton.dataset.filter = newCatId;
+                newButton.textContent = newCat.charAt(0).toUpperCase() + newCat.slice(1);
+                filterContainer.appendChild(newButton);
+            }
+        }
+
+        function applyEditChanges() {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(currentHtmlContent, 'text/html');
+            
+            handleNewCategory(doc);
+            const success = applyChangesToElement(doc);
+
+            if (success) {
+                currentHtmlContent = doc.documentElement.outerHTML;
+                reloadIframe();
+                editCount++;
+                localStorage.setItem('editCount', editCount);
+                showToast(`Changes applied! (${editCount}/${MAX_EDITS} edits)`, true);
+                checkEditLimit();
+            } else { showToast('Failed to find the element.', false); }
+            closeEditModal();
+        }
+
+        function applyAddProject() {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(currentHtmlContent, 'text/html');
+            const portfolioGrid = doc.querySelector('.portfolio-grid');
+            const firstProject = portfolioGrid?.querySelector('.portfolio-item');
+            if(!firstProject){ showToast('Projects section not found.', false); return; }
+            
+            handleNewCategory(doc);
+
+            const newProject = firstProject.cloneNode(true);
+            newProject.dataset.category = (newCategory.value.trim() || editCategory.value).toLowerCase();
+            
+            if (newProject.querySelector('.portfolio-title')) newProject.querySelector('.portfolio-title').textContent = editText.value || "New Title";
+            if (newProject.querySelector('a')) newProject.querySelector('a').href = editLink.value || "#";
+            if (newProject.querySelector('img')) {
+                newProject.querySelector('img').src = newBase64Image || editImageUrl.value.trim() || 'https://placehold.co/600x400/cccccc/ffffff?text=Image';
+            }
+            
+            newProject.setAttribute('data-editor-id', `el-${Date.now()}-new`);
+            portfolioGrid.appendChild(newProject);
+            currentHtmlContent = doc.documentElement.outerHTML;
+            reloadIframe(true);
+            
+            editCount++;
+            localStorage.setItem('editCount', editCount);
+            showToast(`Project added! (${editCount}/${MAX_EDITS} edits)`, true);
+            checkEditLimit();
+            closeEditModal();
+        }
+
+        // --- Initialize on page load ---
+        document.addEventListener('DOMContentLoaded', () => {
+            currentMonthElement.textContent = months[new Date().getMonth()];
+            initializeTheme();
+            editCount = parseInt(localStorage.getItem('editCount') || '0', 10);
+            checkEditLimit(true);
+        });
+    </script>
+</body>
+</html>
 
